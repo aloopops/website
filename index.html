@@ -6,6 +6,15 @@
     <title>Orion AI Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        .settings-sidebar.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .settings-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
         ::-webkit-scrollbar {
             display: none;
         }
@@ -669,25 +678,6 @@
             }
         }
 
-        .thinking-message {
-            padding: 0.75rem 1rem;
-            background-color: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: 1rem;
-            border-bottom-left-radius: 0.25rem;
-            font-size: 0.95rem;
-            color: var(--dark);
-            max-width: 80%;
-            align-self: flex-start;
-            margin: 0.5rem 1.5rem;
-        }
-
-        .thinking-message.dark-mode {
-            background-color: var(--dark-border);
-            border-color: var(--dark-border);
-            color: var(--dark-text);
-        }
-
         .message-text ul,
         .message-text ol {
             padding-left: 1.5rem;
@@ -833,7 +823,7 @@
             content: "";
             height: 16px;
             width: 16px;
-            left: 2px;
+            margin: 2px;
             bottom: 2px;
             background-color: white;
             transition: 0.4s;
@@ -920,7 +910,7 @@
 <body>
     <div class="app-container">
         <header>
-            <button class="mobile-menu-btn" id="mobileMenuBtn">
+            <button class="mobile-menu-btn">
                 <i class="fas fa-bars"></i>
             </button>
             <div class="logo">
@@ -964,13 +954,14 @@
                 <div class="settings-section">
                     <div class="settings-label">AI Model</div>
                     <select class="select-field" id="modelSelect">
-                        <option value="openai/gpt-4.1">OpenAI GPT-4.1</option>
-                        <option value="openai/gpt-4o">OpenAI GPT-4o</option>
-                        <option value="openai/gpt-4.1-mini">OpenAI GPT-4.1-mini</option>
                         <option value="deepseek/DeepSeek-R1">DeepSeek-R1</option>
                         <option value="deepseek/DeepSeek-V3-0324">DeepSeek V3</option>
+                        <option value="openai/gpt-4.1">OpenAI GPT-4.1</option>
+                        <option value="openai/gpt-4.1-mini">OpenAI GPT-4.1-mini</option>
                         <option value="openai/gpt-4.1-nano">OpenAI GPT-4.1-nano</option>
+                        <option value="openai/gpt-4o">OpenAI GPT-4o</option>
                         <option value="openai/gpt-4o-mini">OpenAI GPT-4o mini</option>
+                        <option value="openai/o4-mini">OpenAI o4-mini</option>
                         <option value="microsoft/Phi-3.5-MoE-instruct">Phi-3.5-MoE instruct (128k)</option>
                         <option value="microsoft/Phi-3.5-mini-instruct">Phi-3.5-mini instruct (128k)</option>
                         <option value="microsoft/Phi-3.5-vision-instruct">Phi-3.5-vision instruct (128k)</option>
@@ -1062,8 +1053,7 @@
         const clearChatBtn = document.getElementById('clearChatBtn');
         const suggestionChips = document.querySelectorAll('.suggestion-chip');
         const newChatBtn = document.getElementById('newChatBtn');
-        const chatList = document.getElementById('chatList');
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebarOverlay');
         const closeSidebarBtn = document.getElementById('closeSidebarBtn');
@@ -1240,7 +1230,7 @@
             const elements = document.querySelectorAll(
                 '.sidebar, .settings-sidebar, .mobile-menu-btn, .settings-btn, ' +
                 '.chat-container, .input-container, .suggestion-chip, .input-field, ' +
-                '.action-btn, .chat-footer, .typing-indicator, .thinking-message, .chat-item, ' +
+                '.action-btn, .chat-footer, .typing-indicator, .chat-item, ' +
                 '.bin-button, .sidebar-title, .settings-title, .settings-label, ' +
                 '.select-field, .toggle-switch, .message-text, .message-text blockquote'
             );
@@ -1381,7 +1371,7 @@
 
             if (sender === 'ai') {
                 const modelSpan = document.createElement('span');
-                modelSpan.textContent = modelSelect.value;
+                modelSpan.textContent = modelSelect.value.split('/').pop();
                 metaDiv.appendChild(modelSpan);
             }
             metaDiv.appendChild(timeSpan);
@@ -1498,15 +1488,6 @@
                 .replace(/^\s*\d+\.\s(.*$)/gm, '<li>$1</li>');
         }
 
-        function addThinkingMessage() {
-            const thinkingDiv = document.createElement('div');
-            thinkingDiv.className = `thinking-message ${document.body.classList.contains('dark-mode') ? 'dark-mode' : ''}`;
-            thinkingDiv.textContent = 'Thinking...';
-            chatMessages.appendChild(thinkingDiv);
-            scrollToBottom();
-            return thinkingDiv;
-        }
-
         function addTypingIndicator() {
             const typingDiv = document.createElement('div');
             typingDiv.className = `typing-indicator ${document.body.classList.contains('dark-mode') ? 'dark-mode' : ''}`;
@@ -1520,9 +1501,9 @@
             return typingDiv;
         }
 
-        function removeIndicator(indicatorDiv) {
-            if (indicatorDiv && indicatorDiv.parentNode) {
-                indicatorDiv.parentNode.removeChild(indicatorDiv);
+        function removeTypingIndicator(typingDiv) {
+            if (typingDiv && typingDiv.parentNode) {
+                typingDiv.parentNode.removeChild(typingDiv);
             }
         }
 
@@ -1534,113 +1515,101 @@
             messageInput.value = '';
             sendBtn.disabled = true;
 
-            const isDeepSeekR1 = modelSelect.value === 'deepseek/DeepSeek-R1';
-            const indicatorDiv = isDeepSeekR1 ? addThinkingMessage() : addTypingIndicator();
-            const minAnimationTime = isDeepSeekR1 ? 0 : 1000;
+            const typingIndicator = addTypingIndicator();
+            const minAnimationTime = 500;
             const animationStart = Date.now();
 
             try {
                 let result = '';
 
-                if (isDeepSeekR1) {
+                if (modelSelect.value === 'deepseek/DeepSeek-R1') {
                     // Use OpenRouter API for DeepSeek R1 with streaming
                     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer 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', // Replace with your new OpenRouter API key
+                            'Authorization': 'Bearer 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',
                             'HTTP-Referer': 'https://gentovert.wordpress.com',
                             'X-Title': 'gentovert',
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
                             model: 'deepseek/deepseek-r1:free',
-                            messages: [{ role: 'user', content: message }],
+                            max_token: 4000,
+                            messages: [
+                                {
+                                    role: 'system',
+                                    content: 'Always start your response with a brief thinking process explaining your approach.'
+                                },
+                                { 
+                                    role: 'user', 
+                                    content: message 
+                                }
+                            ],
                             stream: true
                         })
                     });
 
-                    console.log('DeepSeek-R1 Response Status:', response.status);
-
                     if (!response.ok) {
                         const errorText = await response.text();
-                        console.error('DeepSeek-R1 Error Response:', errorText);
                         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
                     }
 
+                    const elapsed = Date.now() - animationStart;
+                    if (elapsed < minAnimationTime) {
+                        // Add your logic here
+                    }
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
-                    let firstChunkReceived = false;
+
+                    // Debugging: Log raw chunks to verify server response
+                    let rawResponse = '';
+
+                    removeTypingIndicator(typingIndicator);
+                    addMessage('ai', '', true, true);
 
                     while (true) {
                         const { done, value } = await reader.read();
-                        if (done) {
-                            console.log('DeepSeek-R1 Stream Complete');
-                            break;
-                        }
+                        if (done) break;
 
                         const chunk = decoder.decode(value, { stream: true });
-                        console.log('DeepSeek-R1 Raw Chunk:', chunk);
+                        rawResponse += chunk; // Log raw chunk for debugging
+                        console.log('Raw chunk:', chunk); // Debug: Log each chunk
+
                         const lines = chunk.split('\n');
 
                         for (const line of lines) {
                             if (line.startsWith('data: ')) {
                                 const data = line.slice(6);
-                                if (data === '[DONE]') {
-                                    console.log('DeepSeek-R1 Stream Ended with [DONE]');
-                                    break;
-                                }
+                                if (data === '[DONE]') break;
 
                                 try {
                                     const parsed = JSON.parse(data);
-                                    console.log('DeepSeek-R1 Parsed Chunk:', parsed);
-                                    const content = parsed.choices?.[0]?.delta?.content;
+                                    const content = parsed.choices[0].delta.content;
                                     if (content) {
-                                        if (!firstChunkReceived) {
-                                            removeIndicator(indicatorDiv);
-                                            addMessage('ai', '', true, true);
-                                            firstChunkReceived = true;
-                                        }
                                         result += content;
-                                        currentAiMessageDiv.textContent = result;
+                                        // Use innerHTML to preserve formatting and prevent overwriting
+                                        currentAiMessageDiv.innerHTML = formatText(result);
                                         scrollToBottom();
                                     }
                                 } catch (e) {
-                                    console.error('Error parsing DeepSeek R1 stream chunk:', e, 'Raw data:', data);
+                                    console.error('Error parsing stream chunk:', line, e);
                                 }
                             }
                         }
                     }
 
-                    if (!firstChunkReceived) {
-                        // Fallback to non-streaming request if streaming fails
-                        console.log('No streaming data received, falling back to non-streaming request');
-                        removeIndicator(indicatorDiv);
-                        const nonStreamResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': 'Bearer YOUR_NEW_API_KEY', // Replace with your new OpenRouter API key
-                                'HTTP-Referer': 'https://gentovert.wordpress.com',
-                                'X-Title': 'gentovert',
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                model: 'deepseek/deepseek-r1:free',
-                                messages: [{ role: 'user', content: message }],
-                                stream: false
-                            })
-                        });
+                    console.log('Full raw response:', rawResponse); // Debug: Log full response
 
-                        if (!nonStreamResponse.ok) {
-                            const errorText = await nonStreamResponse.text();
-                            console.error('DeepSeek-R1 Non-Streaming Error Response:', errorText);
-                            throw new Error(`Non-streaming HTTP error! status: ${nonStreamResponse.status}, message: ${errorText}`);
-                        }
+                    // Final rendering after streaming completes
+                    currentAiMessageDiv.innerHTML = '';
+                    processMessageText(result, currentAiMessageDiv);
 
-                        const data = await nonStreamResponse.json();
-                        console.log('DeepSeek-R1 Non-Streaming Response:', data);
-                        result = data.choices?.[0]?.message?.content || 'No response content received';
-                        addMessage('ai', result, true);
+                    const chat = chats.find(c => c.id === currentChatId);
+                    if (chat) {
+                        chat.messages[chat.messages.length - 1].text = result;
+                        saveChats();
                     }
+
                 } else {
                     // Use existing API for other models
                     const encodedPrompt = encodeURIComponent(message);
@@ -1651,11 +1620,8 @@
                         }
                     });
 
-                    console.log('Other Model Response Status:', response.status);
-
                     if (!response.ok) {
                         const errorText = await response.text();
-                        console.error('Other Model Error Response:', errorText);
                         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
                     }
 
@@ -1667,26 +1633,20 @@
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
 
-                    removeIndicator(indicatorDiv);
+                    removeTypingIndicator(typingIndicator);
                     addMessage('ai', '', true, true);
 
                     while (true) {
                         const { done, value } = await reader.read();
-                        if (done) {
-                            console.log('Other Model Stream Complete');
-                            break;
-                        }
+                        if (done) break;
 
                         const chunk = decoder.decode(value, { stream: true });
-                        console.log('Other Model Chunk:', chunk);
                         result += chunk;
 
                         currentAiMessageDiv.textContent = result;
                         scrollToBottom();
                     }
-                }
 
-                if (result) {
                     currentAiMessageDiv.innerHTML = '';
                     processMessageText(result, currentAiMessageDiv);
 
@@ -1695,17 +1655,15 @@
                         chat.messages[chat.messages.length - 1].text = result;
                         saveChats();
                     }
-                } else if (!isDeepSeekR1) {
-                    throw new Error('No response content received');
                 }
 
             } catch (error) {
-                console.error('Error in sendMessage:', error);
+                console.error('Error:', error);
                 const elapsed = Date.now() - animationStart;
                 if (elapsed < minAnimationTime) {
                     await new Promise(resolve => setTimeout(resolve, minAnimationTime - elapsed));
                 }
-                removeIndicator(indicatorDiv);
+                removeTypingIndicator(typingIndicator);
                 if (currentAiMessageDiv) {
                     currentAiMessageDiv.textContent = 'Error: ' + error.message;
                 } else {
